@@ -18,7 +18,7 @@ DEFAULTS = {
     "port": "3306",
     "user": "root",
     "password": "",
-    "database": "university_records",
+    "database": "university_db",
 }
 
 
