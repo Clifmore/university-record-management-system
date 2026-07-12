@@ -35,30 +35,31 @@ from app import db
 STUDENTS_IN_COURSE_BY_LECTURER = """
 SELECT
     s.student_id AS `Student ID`,
-    CONCAT(s.first_name, ' ', s.last_name) AS `Name`,
-    p.name AS `Program`,
+    s.name AS `Name`,
+    p.program_name AS `Program`,
     s.year_of_study AS `Year`
 FROM students AS s
 JOIN enrolments AS e ON e.student_id = s.student_id
-JOIN course_teaching AS ct ON ct.course_code = e.course_code
-JOIN lecturers AS l ON l.lecturer_id = ct.lecturer_id
+JOIN teaching_assignments AS ta
+    ON ta.course_code = e.course_code
+    AND ta.semester = e.semester
+JOIN lecturers AS l ON l.lecturer_id = ta.lecturer_id
 JOIN programs AS p ON p.program_id = s.program_id
 WHERE e.course_code = %s
-  AND LOWER(l.last_name) = LOWER(%s)
-GROUP BY s.student_id, s.first_name, s.last_name, p.name,
-    s.year_of_study
+  AND LOWER(l.name) LIKE LOWER(%s)
+GROUP BY s.student_id, s.name, p.program_name, s.year_of_study
 ORDER BY s.student_id
 """
 
 LECTURERS_BY_EXPERTISE = """
 SELECT
     l.lecturer_id AS `Lecturer ID`,
-    CONCAT(l.first_name, ' ', l.last_name) AS `Name`,
-    d.name AS `Department`,
+    l.name AS `Name`,
+    d.dept_name AS `Department`,
     le.expertise_area AS `Expertise Area`
 FROM lecturers AS l
 JOIN lecturer_expertise AS le ON le.lecturer_id = l.lecturer_id
-JOIN departments AS d ON d.department_id = l.department_id
+JOIN departments AS d ON d.dept_id = l.dept_id
 WHERE LOWER(le.expertise_area) LIKE LOWER(%s)
 ORDER BY l.lecturer_id, le.expertise_area
 """
@@ -103,12 +104,14 @@ ORDER BY s.student_id
 def students_in_course_by_lecturer(course_code, lecturer_last_name):
     """Students enrolled in a course taught by a given lecturer.
 
-    Returns the student id, full name, program name and year of
-    study for every student enrolled in the course identified by
-    ``course_code`` where that course is taught by a lecturer whose
-    surname matches ``lecturer_last_name`` (case-insensitive).
+    Returns the student id, full name, program name and year of study
+    for every student enrolled in the course identified by
+    ``course_code`` in a semester where that course was taught by a
+    lecturer whose name contains ``lecturer_last_name`` (matched
+    case-insensitively as a substring, since lecturer names are stored
+    in a single ``name`` column).
     """
-    params = (course_code, lecturer_last_name)
+    params = (course_code, "%{0}%".format(lecturer_last_name))
     return db.run_query(STUDENTS_IN_COURSE_BY_LECTURER, params)
 
 
