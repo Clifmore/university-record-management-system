@@ -63,6 +63,42 @@ WHERE LOWER(le.expertise_area) LIKE LOWER(%s)
 ORDER BY l.lecturer_id, le.expertise_area
 """
 
+FINAL_YEAR_HIGH_AVERAGE = """
+SELECT
+    s.student_id            AS `Student ID`,
+    s.name                  AS `Name`,
+    p.program_name          AS `Program`,
+    s.year_of_study         AS `Year`,
+    ROUND(AVG(e.grade), 2)  AS `Average Grade`
+FROM students AS s
+JOIN programs AS p ON p.program_id = s.program_id
+JOIN enrolments AS e ON e.student_id = s.student_id
+WHERE s.graduation_status = 'Enrolled'
+  AND s.year_of_study = p.duration_years
+  AND e.grade IS NOT NULL
+GROUP BY s.student_id, s.name, p.program_name, s.year_of_study
+HAVING AVG(e.grade) > 70
+ORDER BY `Average Grade` DESC, s.student_id
+"""
+
+STUDENTS_NOT_REGISTERED_THIS_SEMESTER = """
+SELECT
+    s.student_id     AS `Student ID`,
+    s.name           AS `Name`,
+    p.program_name   AS `Program`,
+    s.year_of_study  AS `Year`
+FROM students AS s
+JOIN programs AS p ON p.program_id = s.program_id
+WHERE s.graduation_status = 'Enrolled'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM enrolments AS e
+      WHERE e.student_id = s.student_id
+        AND e.semester = %s
+  )
+ORDER BY s.student_id
+"""
+
 
 def students_in_course_by_lecturer(course_code, lecturer_last_name):
     """Students enrolled in a course taught by a given lecturer.
@@ -88,6 +124,33 @@ def lecturers_by_expertise(research_area):
     return db.run_query(LECTURERS_BY_EXPERTISE, params)
 
 
+def students_final_year_high_average():
+    """Final-year students whose average grade is above 70%.
+
+    Returns the student id, name, program name, year of study and
+    rounded average grade for every currently enrolled student who is
+    in the final year of their program (``year_of_study`` equal to the
+    program's ``duration_years``) and whose mean grade across all
+    completed enrolments exceeds 70. In-progress enrolments (NULL
+    grade) are ignored when computing the average. Takes no
+    parameters.
+    """
+    return db.run_query(FINAL_YEAR_HIGH_AVERAGE)
+
+
+def students_not_registered_this_semester(semester):
+    """Enrolled students with no course registration in a semester.
+
+    Returns the student id, name, program name and year of study for
+    every currently enrolled student who has no enrolment row for the
+    given ``semester`` (for example ``2026-S1``). Uses a ``NOT EXISTS``
+    anti-join so students with any registration in that semester are
+    excluded.
+    """
+    params = (semester,)
+    return db.run_query(STUDENTS_NOT_REGISTERED_THIS_SEMESTER, params)
+
+
 QUERIES = [
     {
         "title": "Students enrolled in a course taught by a lecturer",
@@ -103,5 +166,17 @@ QUERIES = [
             ("Research area (e.g. machine learning): ", "research_area"),
         ],
         "func": lecturers_by_expertise,
+    },
+    {
+        "title": "Final-year students with an average grade above 70%",
+        "params": [],
+        "func": students_final_year_high_average,
+    },
+    {
+        "title": "Students not registered for any course this semester",
+        "params": [
+            ("Semester (e.g. 2026-S1): ", "semester"),
+        ],
+        "func": students_not_registered_this_semester,
     },
 ]
