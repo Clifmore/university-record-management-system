@@ -101,6 +101,25 @@ ORDER BY s.student_id
 """
 
 
+LECTURER_MOST_STUDENT_PROJECTS = """
+SELECT
+    l.lecturer_id AS `Lecturer ID`,
+    l.name        AS `Name`,
+    COUNT(DISTINCT sup.project_id) AS `Student Projects Supervised`
+FROM lecturers AS l
+JOIN (
+    SELECT pi_lecturer_id AS lecturer_id, project_id
+    FROM research_projects
+    UNION
+    SELECT lecturer_id, project_id
+    FROM project_lecturers
+) AS sup ON sup.lecturer_id = l.lecturer_id
+JOIN project_students AS ps ON ps.project_id = sup.project_id
+GROUP BY l.lecturer_id, l.name
+ORDER BY `Student Projects Supervised` DESC, l.name
+"""
+
+
 def students_in_course_by_lecturer(course_code, lecturer_last_name):
     """Students enrolled in a course taught by a given lecturer.
 
@@ -154,6 +173,20 @@ def students_not_registered_this_semester(semester):
     return db.run_query(STUDENTS_NOT_REGISTERED_THIS_SEMESTER, params)
 
 
+def lecturer_most_student_projects():
+    """Lecturers ranked by student research projects supervised.
+
+    A lecturer supervises a project if they are its principal
+    investigator (``research_projects.pi_lecturer_id``) or a listed
+    project lecturer (``project_lecturers``). Only projects that
+    involve at least one student (``project_students``) are counted,
+    and each project is counted once per lecturer. Results are ordered
+    so the lecturer who has supervised the most student research
+    projects appears first. Takes no parameters.
+    """
+    return db.run_query(LECTURER_MOST_STUDENT_PROJECTS)
+
+
 QUERIES = [
     {
         "title": "Students enrolled in a course taught by a lecturer",
@@ -181,5 +214,11 @@ QUERIES = [
             ("Semester (e.g. 2026-S1): ", "semester"),
         ],
         "func": students_not_registered_this_semester,
+    },
+    {
+        "title": "Lecturer who has supervised the most student research "
+                 "projects",
+        "params": [],
+        "func": lecturer_most_student_projects,
     },
 ]
