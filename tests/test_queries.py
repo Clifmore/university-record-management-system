@@ -65,3 +65,33 @@ def test_not_registered_sql_uses_anti_join():
 
     assert "NOT EXISTS" in sql
     assert "e.semester = %s" in sql
+
+
+@mock.patch("app.db.run_query")
+def test_lecturer_most_student_projects_uses_no_params(run_query):
+    run_query.return_value = (["Lecturer ID"], [(5, "Dr Smith", 3)])
+
+    columns, rows = queries.lecturer_most_student_projects()
+
+    run_query.assert_called_once_with(
+        queries.LECTURER_MOST_STUDENT_PROJECTS
+    )
+    assert columns == ["Lecturer ID"]
+    assert rows == [(5, "Dr Smith", 3)]
+
+
+def test_lecturer_most_student_projects_registered_in_menu():
+    entry = next(
+        entry for entry in queries.QUERIES
+        if entry["func"] is queries.lecturer_most_student_projects
+    )
+    assert entry["params"] == []
+
+
+def test_lecturer_most_student_projects_sql_targets_real_schema():
+    sql = queries.LECTURER_MOST_STUDENT_PROJECTS
+
+    assert "project_lecturers" in sql
+    assert "project_students" in sql
+    assert "pi_lecturer_id" in sql
+    assert "COUNT(DISTINCT sup.project_id)" in sql
