@@ -112,18 +112,6 @@
 
 
 
-\## Next Steps
-
-
-
-1\. ✅ All queries tested and working
-
-2\. ⬜ Record video demo
-
-3\. ⬜ Write final report
-
-4\. ⬜ Submit assignment
-
 
 
 \---
