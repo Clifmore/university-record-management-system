@@ -68,30 +68,120 @@ def test_not_registered_sql_uses_anti_join():
 
 
 @mock.patch("app.db.run_query")
-def test_lecturer_most_student_projects_uses_no_params(run_query):
-    run_query.return_value = (["Lecturer ID"], [(5, "Dr Smith", 3)])
+def test_advisor_contact_passes_wildcarded_name(run_query):
+    run_query.return_value = (["Student"], [("Amira Khalil",)])
 
-    columns, rows = queries.lecturer_most_student_projects()
+    columns, rows = queries.student_advisor_contact("Amira")
 
     run_query.assert_called_once_with(
-        queries.LECTURER_MOST_STUDENT_PROJECTS
+        queries.STUDENT_ADVISOR_CONTACT, ("%Amira%",)
     )
-    assert columns == ["Lecturer ID"]
-    assert rows == [(5, "Dr Smith", 3)]
+    assert rows == [("Amira Khalil",)]
 
 
-def test_lecturer_most_student_projects_registered_in_menu():
+def test_advisor_contact_registered_in_menu():
     entry = next(
         entry for entry in queries.QUERIES
-        if entry["func"] is queries.lecturer_most_student_projects
+        if entry["func"] is queries.student_advisor_contact
     )
-    assert entry["params"] == []
+    assert entry["params"] == [("Student name (e.g. Amira): ", "student_name")]
 
 
-def test_lecturer_most_student_projects_sql_targets_real_schema():
-    sql = queries.LECTURER_MOST_STUDENT_PROJECTS
+def test_advisor_contact_sql_joins_advisor():
+    sql = queries.STUDENT_ADVISOR_CONTACT
 
+    assert "l.lecturer_id = s.advisor_id" in sql
+    assert "LOWER(s.name) LIKE LOWER(%s)" in sql
+
+
+@mock.patch("app.db.run_query")
+def test_courses_in_department_passes_dept_param(run_query):
+    run_query.return_value = (["Lecturer"], [("Dr Sara Haddad",)])
+
+    columns, rows = queries.courses_taught_in_department("Computer Science")
+
+    run_query.assert_called_once_with(
+        queries.COURSES_TAUGHT_IN_DEPARTMENT, ("Computer Science",)
+    )
+    assert rows == [("Dr Sara Haddad",)]
+
+
+def test_courses_in_department_registered_in_menu():
+    entry = next(
+        entry for entry in queries.QUERIES
+        if entry["func"] is queries.courses_taught_in_department
+    )
+    assert entry["params"] == [
+        ("Department name (e.g. Computer Science): ", "dept_name"),
+    ]
+
+
+def test_courses_in_department_sql_joins_teaching():
+    sql = queries.COURSES_TAUGHT_IN_DEPARTMENT
+
+    assert "teaching_assignments" in sql
+    assert "LOWER(d.dept_name) = LOWER(%s)" in sql
+
+
+@mock.patch("app.db.run_query")
+def test_staff_in_department_passes_dept_param_twice(run_query):
+    run_query.return_value = (["Name"], [("Dr Sara Haddad",)])
+
+    columns, rows = queries.staff_in_department("Computer Science")
+
+    run_query.assert_called_once_with(
+        queries.STAFF_IN_DEPARTMENT,
+        ("Computer Science", "Computer Science"),
+    )
+    assert rows == [("Dr Sara Haddad",)]
+
+
+def test_staff_in_department_registered_in_menu():
+    entry = next(
+        entry for entry in queries.QUERIES
+        if entry["func"] is queries.staff_in_department
+    )
+    assert entry["params"] == [
+        ("Department name (e.g. Computer Science): ", "dept_name"),
+    ]
+
+
+def test_staff_in_department_sql_unions_both_staff_tables():
+    sql = queries.STAFF_IN_DEPARTMENT
+
+    assert "UNION ALL" in sql
+    assert "FROM lecturers" in sql
+    assert "FROM non_academic_staff" in sql
+
+
+@mock.patch("app.db.run_query")
+def test_research_supervisors_passes_program_param(run_query):
+    run_query.return_value = (["Supervisor"], [("Dr Sara Haddad",)])
+
+    columns, rows = queries.research_supervisors_in_program(
+        "Computer Science"
+    )
+
+    run_query.assert_called_once_with(
+        queries.RESEARCH_SUPERVISORS_IN_PROGRAM, ("Computer Science",)
+    )
+    assert rows == [("Dr Sara Haddad",)]
+
+
+def test_research_supervisors_registered_in_menu():
+    entry = next(
+        entry for entry in queries.QUERIES
+        if entry["func"] is queries.research_supervisors_in_program
+    )
+    assert entry["params"] == [
+        ("Program name (e.g. Computer Science): ", "program_name"),
+    ]
+
+
+def test_research_supervisors_sql_counts_pi_and_project_lecturers():
+    sql = queries.RESEARCH_SUPERVISORS_IN_PROGRAM
+
+    assert "pi_lecturer_id" in sql
     assert "project_lecturers" in sql
     assert "project_students" in sql
-    assert "pi_lecturer_id" in sql
-    assert "COUNT(DISTINCT sup.project_id)" in sql
+    assert "LOWER(p.program_name) = LOWER(%s)" in sql
