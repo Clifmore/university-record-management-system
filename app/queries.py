@@ -119,6 +119,73 @@ GROUP BY l.lecturer_id, l.name
 ORDER BY `Student Projects Supervised` DESC, l.name
 """
 
+STUDENT_ADVISOR_CONTACT = """
+SELECT
+    s.student_id  AS `Student ID`,
+    s.name        AS `Student`,
+    l.name        AS `Advisor`,
+    l.email       AS `Advisor Email`,
+    d.dept_name   AS `Advisor Department`
+FROM students AS s
+JOIN lecturers AS l ON l.lecturer_id = s.advisor_id
+JOIN departments AS d ON d.dept_id = l.dept_id
+WHERE LOWER(s.name) LIKE LOWER(%s)
+ORDER BY s.student_id
+"""
+
+COURSES_TAUGHT_IN_DEPARTMENT = """
+SELECT DISTINCT
+    l.name        AS `Lecturer`,
+    c.course_code AS `Course Code`,
+    c.course_name AS `Course`,
+    ta.semester   AS `Semester`
+FROM departments AS d
+JOIN lecturers AS l ON l.dept_id = d.dept_id
+JOIN teaching_assignments AS ta ON ta.lecturer_id = l.lecturer_id
+JOIN courses AS c ON c.course_code = ta.course_code
+WHERE LOWER(d.dept_name) = LOWER(%s)
+ORDER BY l.name, ta.semester, c.course_code
+"""
+
+STAFF_IN_DEPARTMENT = """
+SELECT
+    l.name       AS `Name`,
+    'Lecturer'   AS `Role`,
+    d.dept_name  AS `Department`
+FROM lecturers AS l
+JOIN departments AS d ON d.dept_id = l.dept_id
+WHERE LOWER(d.dept_name) = LOWER(%s)
+UNION ALL
+SELECT
+    ns.name       AS `Name`,
+    ns.job_title  AS `Role`,
+    d.dept_name   AS `Department`
+FROM non_academic_staff AS ns
+JOIN departments AS d ON d.dept_id = ns.dept_id
+WHERE LOWER(d.dept_name) = LOWER(%s)
+ORDER BY `Role`, `Name`
+"""
+
+RESEARCH_SUPERVISORS_IN_PROGRAM = """
+SELECT DISTINCT
+    l.name         AS `Supervisor`,
+    l.email        AS `Email`,
+    p.program_name AS `Program`
+FROM (
+    SELECT pi_lecturer_id AS lecturer_id, project_id
+    FROM research_projects
+    UNION
+    SELECT lecturer_id, project_id
+    FROM project_lecturers
+) AS sup
+JOIN project_students AS ps ON ps.project_id = sup.project_id
+JOIN students AS s ON s.student_id = ps.student_id
+JOIN programs AS p ON p.program_id = s.program_id
+JOIN lecturers AS l ON l.lecturer_id = sup.lecturer_id
+WHERE LOWER(p.program_name) = LOWER(%s)
+ORDER BY l.name
+"""
+
 
 def students_in_course_by_lecturer(course_code, lecturer_last_name):
     """Students enrolled in a course taught by a given lecturer.
@@ -187,6 +254,58 @@ def lecturer_most_student_projects():
     return db.run_query(LECTURER_MOST_STUDENT_PROJECTS)
 
 
+def student_advisor_contact(student_name):
+    """Contact details for a student's academic advisor.
+
+    Returns the student id, student name, and the name, email and
+    department of that student's advisor, for every student whose name
+    contains ``student_name`` (matched case-insensitively as a
+    substring). Students with no advisor assigned are not shown.
+    """
+    params = ("%{0}%".format(student_name),)
+    return db.run_query(STUDENT_ADVISOR_CONTACT, params)
+
+
+def courses_taught_in_department(dept_name):
+    """Courses taught by the lecturers of a given department.
+
+    Returns the lecturer name, course code, course name and semester
+    for every teaching assignment held by a lecturer who belongs to
+    the department named ``dept_name`` (matched case-insensitively).
+    """
+    params = (dept_name,)
+    return db.run_query(COURSES_TAUGHT_IN_DEPARTMENT, params)
+
+
+def staff_in_department(dept_name):
+    """All staff working in a given department.
+
+    Returns the name, role and department of every member of staff in
+    the department named ``dept_name`` (matched case-insensitively),
+    combining academic staff (lecturers) and non-academic staff via a
+    ``UNION``. Lecturers are shown with the role ``Lecturer``;
+    non-academic staff are shown with their job title.
+    """
+    params = (dept_name, dept_name)
+    return db.run_query(STAFF_IN_DEPARTMENT, params)
+
+
+def research_supervisors_in_program(program_name):
+    """Lecturers who supervise research students in a program.
+
+    Returns the name, email and program for every lecturer who
+    supervises at least one research student enrolled in the program
+    named ``program_name`` (matched case-insensitively). A lecturer
+    supervises a project if they are its principal investigator
+    (``research_projects.pi_lecturer_id``) or a listed project lecturer
+    (``project_lecturers``) -- the same definition used elsewhere in
+    this module. Results are de-duplicated so each supervisor appears
+    once.
+    """
+    params = (program_name,)
+    return db.run_query(RESEARCH_SUPERVISORS_IN_PROGRAM, params)
+
+
 QUERIES = [
     {
         "title": "Students enrolled in a course taught by a lecturer",
@@ -220,5 +339,33 @@ QUERIES = [
                  "projects",
         "params": [],
         "func": lecturer_most_student_projects,
+    },
+    {
+        "title": "Contact details for a student's advisor",
+        "params": [
+            ("Student name (e.g. Amira): ", "student_name"),
+        ],
+        "func": student_advisor_contact,
+    },
+    {
+        "title": "Courses taught by lecturers in a department",
+        "params": [
+            ("Department name (e.g. Computer Science): ", "dept_name"),
+        ],
+        "func": courses_taught_in_department,
+    },
+    {
+        "title": "Staff working in a department",
+        "params": [
+            ("Department name (e.g. Computer Science): ", "dept_name"),
+        ],
+        "func": staff_in_department,
+    },
+    {
+        "title": "Lecturers who supervise research students in a program",
+        "params": [
+            ("Program name (e.g. Computer Science): ", "program_name"),
+        ],
+        "func": research_supervisors_in_program,
     },
 ]
