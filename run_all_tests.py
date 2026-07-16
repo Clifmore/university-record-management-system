@@ -16,7 +16,7 @@ DB_CONFIG = {
     "port": 5432,
     "database": "university_db",
     "user": "postgres",
-    "password": "postgres",  # <<< CHANGE THIS to your actual password
+    "password": "Bigboy130784",  # <<< CHANGE THIS to your actual password
 }
 
 # Test Results Tracking
