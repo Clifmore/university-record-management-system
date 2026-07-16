@@ -2,8 +2,10 @@
 from app.db import DatabaseError
 from app.queries import QUERIES
 
-EXIT_CHOICES = ("0", "q", "Q")
+EXIT_CHOICES = ("0", "q", "quit", "exit")
 GOODBYE = "Goodbye."
+WELCOME = "Welcome to the University Record Management System."
+BLANK_INPUT_MESSAGE = "Please enter a value (this field cannot be blank)."
 
 
 def render_menu(queries):
@@ -30,7 +32,7 @@ def resolve_choice(choice, queries):
         choice is not a valid menu entry, otherwise the zero-based
         index of the selected query within ``queries``.
     """
-    if choice in EXIT_CHOICES:
+    if choice.lower() in EXIT_CHOICES:
         return "exit"
     if not choice.isdigit():
         return None
@@ -40,11 +42,24 @@ def resolve_choice(choice, queries):
     return selection - 1
 
 
+def prompt_value(prompt_text):
+    """Prompt until the user enters a non-empty value.
+
+    Re-prompts on blank or whitespace-only input with a short message,
+    so an empty string is never passed to a query.
+    """
+    while True:
+        value = input(prompt_text).strip()
+        if value:
+            return value
+        print(BLANK_INPUT_MESSAGE)
+
+
 def prompt_params(params):
-    """Collect a value for each ``(prompt_text, param_name)`` pair."""
+    """Collect a non-empty value for each ``(prompt_text, name)`` pair."""
     values = {}
     for prompt_text, param_name in params:
-        values[param_name] = input(prompt_text).strip()
+        values[param_name] = prompt_value(prompt_text)
     return values
 
 
@@ -74,8 +89,34 @@ def print_table(columns, rows):
         ))
 
 
+def summarise_rows(rows):
+    """Return a human-readable count line for a result set."""
+    count = len(rows)
+    noun = "row" if count == 1 else "rows"
+    return "{0} {1}.".format(count, noun)
+
+
+def pause(prompt="\nPress Enter to return to the menu... "):
+    """Pause so results can be read before the menu is shown again."""
+    input(prompt)
+
+
+def run_selected_query(query):
+    """Prompt for a query's parameters, run it and show the results."""
+    print("\n> {0}".format(query["title"]))
+    try:
+        values = prompt_params(query["params"])
+        columns, rows = query["func"](**values)
+        print_table(columns, rows)
+        if rows:
+            print(summarise_rows(rows))
+    except DatabaseError as exc:
+        print(str(exc))
+
+
 def main():
     """Run the interactive query menu until the user exits."""
+    print(WELCOME)
     try:
         while True:
             print(render_menu(QUERIES))
@@ -89,13 +130,8 @@ def main():
                 print("Please choose a valid option from the menu.")
                 continue
 
-            query = QUERIES[action]
-            try:
-                values = prompt_params(query["params"])
-                columns, rows = query["func"](**values)
-                print_table(columns, rows)
-            except DatabaseError as exc:
-                print(str(exc))
+            run_selected_query(QUERIES[action])
+            pause()
     except (KeyboardInterrupt, EOFError):
         print(GOODBYE)
 
